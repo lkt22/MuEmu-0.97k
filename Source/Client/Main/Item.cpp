@@ -50,6 +50,8 @@ void CItem::Init()
 	SetByte(0x004C2F1F, 0xEB); // Skip reducing damage in staffs (Help Window -> Item Info)
 
 	SetByte(0x004E08B0, 0x28); // Allow drop Divine items
+
+	SetDword(0x00510BF3 + 1, GL_REPEAT); // Fix "JointThunder01" > Wings of Darkness
 }
 
 void CItem::ItemConvert(ITEM* ip, BYTE Attribute1, BYTE Attribute2)

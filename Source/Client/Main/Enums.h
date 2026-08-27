@@ -214,6 +214,8 @@ enum eSkillNumber
 /* Models */
 enum eModelNumbers
 {
+	MODEL_PLAYER = 390,
+
 	MODEL_SWORD = ITEM_BASE_MODEL,
 	MODEL_AXE = MODEL_SWORD + MAX_ITEM_TYPE,
 	MODEL_MACE = MODEL_AXE + MAX_ITEM_TYPE,

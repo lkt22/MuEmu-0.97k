@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "MoveList.h"
+#include "Controller.h"
 #include "EventTimer.h"
 #include "MiniMap.h"
 #include "PrintPlayer.h"
@@ -11,15 +12,22 @@ CMoveList::CMoveList()
 {
 	this->MoveListSwitch = false;
 
-	this->MainBaseHeight = 60.0f;
+	this->m_Pos.x = MOVELIST_WINDOW_POSX;
+	this->m_Pos.y = MOVELIST_WINDOW_POSY;
 
-	this->MainPosX = 5.0f;
+	this->m_Size.cx = ((MOVELIST_SECTION_WIDTH * 3.5f) + 10);
+	this->m_Size.cy = MOVELIST_BASE_HEIGHT;
 
-	this->MainPosY = 5.0f;
+	this->m_SectionWidth = MOVELIST_SECTION_WIDTH;
 
-	this->SectionWidth = 40.0f;
+	this->m_nShowingLines = -1;
+	this->m_iCurrentRenderEndLine = -1;
 
-	this->MainWidth = ((this->SectionWidth * 3.5f) + 10.0f);
+	this->m_ScrollBarPos[0] = (float)this->m_Pos.x + this->m_Size.cx - SCROLL_WIDTH - 3.0f + 1.0f;
+	this->m_ScrollBarPos[1] = 0.0f;
+
+	this->m_ScrollBarSize[0] = SCROLL_BAR_SIZE;
+	this->m_ScrollBarSize[1] = 0.0f;
 
 	this->m_MoveList.clear();
 }
@@ -53,6 +61,13 @@ void CMoveList::Toggle()
 		return;
 	}
 
+	if (ErrorMessage)
+	{
+		this->MoveListSwitch = false;
+
+		return;
+	}
+
 	if (gEventTimer.GetEventTimerState())
 	{
 		gEventTimer.Toggle();
@@ -65,6 +80,19 @@ void CMoveList::Toggle()
 
 	this->MoveListSwitch ^= 1;
 
+	if (this->MoveListSwitch)
+	{
+		this->m_SectionWidth = MOVELIST_SECTION_WIDTH + (25.0f / g_fScreenRate_x);
+
+		this->Scrolling(0);
+
+		this->UpdateWndSize();
+
+		this->UpdateScrollSize();
+
+		this->UpdateScrollPos();
+	}
+
 	PlayBuffer(25, 0, 0);
 }
 
@@ -76,6 +104,8 @@ void CMoveList::Render()
 	}
 
 	this->RenderFrame();
+
+	this->RenderScrollbar();
 
 	this->RenderMapsList();
 }
@@ -99,9 +129,21 @@ void CMoveList::UpdateMouse()
 		return;
 	}
 
-	if (IsWorkZone((int)this->MainPosX, (int)this->MainPosY, (int)this->MainWidth, (int)this->MainHeight))
+	if (ErrorMessage)
+	{
+		this->MoveListSwitch = false;
+
+		return;
+	}
+
+	if (IsWorkZone(this->m_Pos.x, this->m_Pos.y, (int)this->m_Size.cx, (int)this->m_Size.cy))
 	{
 		MouseOnWindow = true;
+
+		if (this->CheckScrolling())
+		{
+			return;
+		}
 
 		if (this->CheckClickOnMap())
 		{
@@ -130,141 +172,133 @@ void CMoveList::RenderFrame()
 
 	glColor4f(0.0f, 0.0f, 0.0f, 0.8f);
 
-	RenderColor(this->MainPosX, this->MainPosY, this->MainWidth, this->MainHeight);
+	RenderColor((float)this->m_Pos.x, (float)this->m_Pos.y, this->m_Size.cx, this->m_Size.cy);
 
-	glColor3f(1.0f, 1.0f, 1.0f);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+	DisableAlphaBlend();
 
 	EnableAlphaTest(true);
 
+	int PosX = this->m_Pos.x + 5;
+	int PosY = this->m_Pos.y + 5;
+
 	DWORD backupBgTextColor = SetBackgroundTextColor;
-
-	SetBackgroundTextColor = Color4b(0, 0, 0, 0);
-
 	DWORD backupTextColor = SetTextColor;
 
+	SelectObject(m_hFontDC, g_hFontBold);
+	SetBackgroundTextColor = Color4b(0, 0, 0, 0);
 	SetTextColor = Color4b(255, 204, 26, 255);
 
-	SelectObject(m_hFontDC, g_hFontBold);
+	// Teleport Window
+	RenderText(PosX, PosY, "Teleport Window", REAL_WIDTH((int)(this->m_Size.cx - 10.0f)), RT3_SORT_CENTER, NULL);
 
-	RenderText((int)this->MainPosX + 5, (int)this->MainPosY + 5, "Teleport Window", REAL_WIDTH((int)(this->MainWidth - 10.0f)), RT3_SORT_CENTER, NULL);
+	PosY = this->m_Pos.y + 20;
 
-	SetBackgroundTextColor = Color4b(0, 0, 0, 0);
-
+	SelectObject(m_hFontDC, g_hFont);
 	SetTextColor = Color4b(127, 178, 255, 255);
 
-	SelectObject(m_hFontDC, g_hFont);
+	// Map
+	RenderText(PosX, PosY, "Map", REAL_WIDTH((int)this->m_SectionWidth), RT3_SORT_CENTER, NULL);
 
-	int PosX = (int)this->MainPosX + 5;
+	PosX += ((int)this->m_SectionWidth);
 
-	RenderText(PosX, (int)this->MainPosY + 20, "Map", REAL_WIDTH((int)this->SectionWidth), RT3_SORT_CENTER, NULL);
+	// Min. Level
+	RenderText(PosX, PosY, "Min. Level", REAL_WIDTH((int)this->m_SectionWidth), RT3_SORT_CENTER, NULL);
 
-	PosX += ((int)this->SectionWidth);
+	PosX += ((int)this->m_SectionWidth);
 
-	RenderText(PosX, (int)this->MainPosY + 20, "Level", REAL_WIDTH((int)this->SectionWidth), RT3_SORT_CENTER, NULL);
+	// Cost
+	RenderText(PosX, PosY, "Cost", REAL_WIDTH((int)this->m_SectionWidth), RT3_SORT_CENTER, NULL);
 
-	PosX += ((int)this->SectionWidth);
+	PosX += ((int)this->m_SectionWidth);
 
-	RenderText(PosX, (int)this->MainPosY + 20, "Cost", REAL_WIDTH((int)this->SectionWidth), RT3_SORT_CENTER, NULL);
+	// VIP
+	RenderText(PosX, PosY, "VIP", REAL_WIDTH((int)(this->m_SectionWidth * 0.5f)), RT3_SORT_CENTER, NULL);
 
-	PosX += ((int)this->SectionWidth);
-
-	RenderText(PosX, (int)this->MainPosY + 20, "VIP", REAL_WIDTH((int)(this->SectionWidth * 0.5f)), RT3_SORT_CENTER, NULL);
+	PosX = this->m_Pos.x + 5;
+	PosY = this->m_Pos.y + (int)this->m_Size.cy - 15;
 
 	SetBackgroundTextColor = Color4b(255, 0, 0, 255);
-
 	SetTextColor = Color4b(255, 255, 255, 255);
 
-	SelectObject(m_hFontDC, g_hFont);
-
-	RenderText((int)this->MainPosX + 5, (int)this->MainPosY + (int)this->MainHeight - 15, "Close", REAL_WIDTH((int)(this->MainWidth - 10.0f)), RT3_SORT_CENTER, NULL);
+	// Close
+	RenderText(PosX, PosY, "Close", REAL_WIDTH((int)(this->m_Size.cx - 10.0f)), RT3_SORT_CENTER, NULL);
 
 	SetBackgroundTextColor = backupBgTextColor;
-
 	SetTextColor = backupTextColor;
+}
+
+void CMoveList::RenderScrollbar()
+{
+	EnableAlphaTest(true);
+
+	glColor4f(0.5f, 0.7f, 1.0f, 0.8f);
+
+	RenderColor(this->m_ScrollBarPos[0], this->m_ScrollBarPos[1], this->m_ScrollBarSize[0], this->m_ScrollBarSize[1]);
+
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+	DisableAlphaBlend();
 }
 
 void CMoveList::RenderMapsList()
 {
 	DWORD backupBgTextColor = SetBackgroundTextColor;
-
 	DWORD backupTextColor = SetTextColor;
 
 	EnableAlphaTest(true);
 
-	int PosX = (int)this->MainPosX + 5;
+	int PosX = (int)this->m_Pos.x + 5;
 
-	int PosY = (int)this->MainPosY + 35;
+	int PosY = (int)this->m_Pos.y + 35;
 
 	if (this->m_MoveList.empty())
 	{
+		SelectObject(m_hFontDC, g_hFontBig);
+
 		SetBackgroundTextColor = Color4b(255, 255, 255, 0);
 
 		SetTextColor = Color4b(255, 255, 255, 255);
 
-		SelectObject(m_hFontDC, g_hFontBig);
-
-		RenderText(PosX, PosY - 8, "NO MOVE INFO", REAL_WIDTH((int)(this->MainWidth - 10.0f)), RT3_SORT_CENTER, NULL);
+		RenderText(PosX, PosY - 8, "NO MOVE INFO", REAL_WIDTH((int)(this->m_Size.cx - 10.0f)), RT3_SORT_CENTER, NULL);
 	}
 	else
 	{
+		SelectObject(m_hFontDC, g_hFont);
+
 		char text[32];
 
-		STRUCT_DECRYPT;
+		// Draw message
+		int iRenderStartLine = 0;
 
-		for (std::vector<MOVE_LIST_INFO>::iterator it = this->m_MoveList.begin(); it != this->m_MoveList.end(); it++)
+		if (this->m_iCurrentRenderEndLine >= this->m_nShowingLines)
 		{
-			if (it->MinLevel != -1 && *(WORD*)(CharacterAttribute + 0x0E) < it->MinLevel)
+			iRenderStartLine = this->m_iCurrentRenderEndLine - this->m_nShowingLines + 1;
+		}
+
+		for (int i = iRenderStartLine; i <= this->m_iCurrentRenderEndLine; i++)
+		{
+			if (i >= (int)this->m_MoveList.size())
 			{
-				it->CanMove = false;
-			}
-			else if (it->MaxLevel != -1 && *(WORD*)(CharacterAttribute + 0x0E) > it->MaxLevel)
-			{
-				it->CanMove = false;
-			}
-			else if (it->MinReset != -1 && gPrintPlayer.ViewReset < (DWORD)it->MinReset)
-			{
-				it->CanMove = false;
-			}
-			else if (it->MaxReset != -1 && gPrintPlayer.ViewReset > (DWORD)it->MaxReset)
-			{
-				it->CanMove = false;
-			}
-			else if (*(DWORD*)(CharacterMachine + 0x548) < it->Money)
-			{
-				it->CanMove = false;
-			}
-			else if (this->PKLimitFree == 0 && *(BYTE*)(Hero + 0x2EA) >= PKLVL_OUTLAW)
-			{
-				it->CanMove = false;
-			}
-			else if (it->MapNumber == MAP_ATLANS && (*(short*)(Hero + 0x2B8) == GET_ITEM_MODEL(13, 2) || *(short*)(Hero + 0x2B8) == GET_ITEM_MODEL(13, 3))) // Uniria,Dinorant
-			{
-				it->CanMove = false;
-			}
-			else if (it->MapNumber == MAP_ICARUS && (*(short*)(Hero + 0x2A0) == -1 && *(short*)(Hero + 0x2B8) != GET_ITEM_MODEL(13, 3))) // Wings
-			{
-				it->CanMove = false;
-			}
-			else if (it->MapNumber == MAP_ICARUS && *(short*)(Hero + 0x2B8) == GET_ITEM_MODEL(13, 2)) // Uniria
-			{
-				it->CanMove = false;
-			}
-			else
-			{
-				it->CanMove = true;
+				break;
 			}
 
-			if (it->CanMove)
+			MOVE_LIST_INFO& it = this->m_MoveList[i];
+
+			it.CanMove = this->CheckMove(it);
+
+			if (it.CanMove)
 			{
-				if (IsWorkZone(PosX, PosY, (int)(this->MainWidth - 10), 10))
+				if (IsWorkZone(PosX, PosY, (int)this->m_Size.cx - 10, 10))
 				{
 					EnableAlphaTest(true);
 
 					glColor4f(0.8f, 0.8f, 0.1f, 0.6f);
 
-					RenderColor((float)PosX, (float)PosY, this->MainWidth - 10.0f, 10.0f);
+					RenderColor((float)PosX, (float)PosY, this->m_Size.cx - 10.0f, 10.0f);
 
-					glColor3f(1.0f, 1.0f, 1.0f);
+					glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 					EnableAlphaTest(true);
 				}
@@ -278,82 +312,96 @@ void CMoveList::RenderMapsList()
 
 			SetBackgroundTextColor = Color4b(255, 255, 255, 0);
 
-			RenderText(PosX, PosY, it->MapName, REAL_WIDTH((int)this->SectionWidth), RT3_SORT_CENTER, NULL);
+			RenderText(PosX, PosY, it.MapName, REAL_WIDTH((int)this->m_SectionWidth), RT3_SORT_CENTER, NULL);
 
-			PosX += ((int)this->SectionWidth);
+			PosX += ((int)this->m_SectionWidth);
 
-			/*
-			if (it->MinLevel == -1) // MinLevel -1
-			{
-				if (it->MaxLevel == -1) // MinLevel -1, MaxLevel -1
-				{
-					wsprintf(text, "~ / ~");
-				}
-				else // MinLevel -1, MaxLevel valid
-				{
-					wsprintf(text, "~ / %d", it->MaxLevel);
-				}
-			}
-			else if (it->MaxLevel == -1) // MinLevel valid, MaxLevel -1
-			{
-				wsprintf(text, "%d / ~", it->MinLevel);
-			}
-			else // Both Valid
-			{
-				wsprintf(text, "%d / %d", it->MinLevel, it->MaxLevel);
-			}
-			*/
-
-			if (it->MinLevel == -1) // MinLevel -1
+			if (it.MinLevel == -1) // MinLevel -1
 			{
 				wsprintf(text, "~");
 			}
 			else // Valid
 			{
-				wsprintf(text, "%d", it->MinLevel);
+				wsprintf(text, "%d", it.MinLevel);
 			}
 
-			RenderText(PosX, PosY, text, REAL_WIDTH((int)this->SectionWidth), RT3_SORT_CENTER, NULL);
+			RenderText(PosX, PosY, text, REAL_WIDTH((int)this->m_SectionWidth), RT3_SORT_CENTER, NULL);
 
-			PosX += ((int)this->SectionWidth);
+			PosX += ((int)this->m_SectionWidth);
 
-			ConvertGold(it->Money, text);
-			RenderText(PosX, PosY, text, REAL_WIDTH((int)this->SectionWidth), RT3_SORT_CENTER, NULL);
+			ConvertGold(it.Money, text);
+			RenderText(PosX, PosY, text, REAL_WIDTH((int)this->m_SectionWidth), RT3_SORT_CENTER, NULL);
 
-			PosX += ((int)this->SectionWidth);
+			PosX += ((int)this->m_SectionWidth);
 
-			if (it->AccountLevel != -1 && it->AccountLevel > 0)
+			if (it.AccountLevel != -1 && it.AccountLevel > 0)
 			{
 				SetTextColor = Color4b(255, 0, 0, 255);
-				RenderText(PosX, PosY, "[VIP]", REAL_WIDTH((int)(this->SectionWidth * 0.5f)), RT3_SORT_CENTER, NULL);
+				RenderText(PosX, PosY, "[VIP]", REAL_WIDTH((int)(this->m_SectionWidth * 0.5f)), RT3_SORT_CENTER, NULL);
 			}
 
 			PosY += 12;
 
-			PosX = (int)this->MainPosX + 5;
+			PosX = this->m_Pos.x + 5;
 		}
-
-		STRUCT_ENCRYPT;
 	}
 
 	SelectObject(m_hFontDC, g_hFont);
-
 	SetBackgroundTextColor = backupBgTextColor;
-
 	SetTextColor = backupTextColor;
+}
+
+bool CMoveList::CheckScrolling()
+{
+	if (gController.MouseWheel > 0)
+	{
+		this->Scrolling(this->m_iCurrentRenderEndLine - 1);
+	}
+	else if (gController.MouseWheel < 0)
+	{
+		this->Scrolling(this->m_iCurrentRenderEndLine + 1);
+	}
+
+	if (gController.MouseWheel != 0)
+	{
+		gController.MouseWheel = 0;
+
+		return true;
+	}
+
+	return false;
 }
 
 bool CMoveList::CheckClickOnMap()
 {
-	int PosX = (int)this->MainPosX + 5;
-
-	int PosY = (int)this->MainPosY + 35;
-
-	for (std::vector<MOVE_LIST_INFO>::iterator it = this->m_MoveList.begin(); it != this->m_MoveList.end(); it++)
+	if (this->m_MoveList.empty())
 	{
-		if (IsWorkZone(PosX, PosY, (int)(this->MainWidth - 10.0f), (int)(10.0f)))
+		return false;
+	}
+
+	int PosX = this->m_Pos.x + 5;
+
+	int PosY = this->m_Pos.y + 35;
+
+	int iRenderStartLine = 0;
+
+	if (this->m_iCurrentRenderEndLine >= this->m_nShowingLines)
+	{
+		iRenderStartLine = this->m_iCurrentRenderEndLine - this->m_nShowingLines + 1;
+	}
+
+	for (int i = iRenderStartLine; i <= this->m_iCurrentRenderEndLine; i++)
+	{
+		if (i >= (int)this->m_MoveList.size())
 		{
-			if (MouseLButtonPush)
+			break;
+		}
+
+		const MOVE_LIST_INFO& it = this->m_MoveList[i];
+
+		if (IsWorkZone(PosX, PosY, (int)(this->m_Size.cx - 10.0f), 10))
+		{
+			if (MouseLButton && MouseLButtonPush)
 			{
 				MouseLButtonPush = false;
 
@@ -361,18 +409,16 @@ bool CMoveList::CheckClickOnMap()
 
 				MouseUpdateTimeMax = 6;
 
-				if (!it->CanMove)
+				if (it.CanMove)
 				{
-					return true;
+					char Text[100];
+
+					wsprintf(Text, "/move %s", it.MapName);
+
+					SendChat(Text);
+
+					this->Toggle();
 				}
-
-				this->Toggle();
-
-				char Text[100];
-
-				wsprintf(Text, "/move %s", it->MapName);
-
-				SendChat(Text);
 
 				return true;
 			}
@@ -386,7 +432,7 @@ bool CMoveList::CheckClickOnMap()
 
 bool CMoveList::CheckClickOnClose()
 {
-	if (IsWorkZone((int)(this->MainPosX + 5.0f), (int)(this->MainPosY + this->MainHeight - 15.0f), (int)(this->MainWidth - 10.0f), (int)(10.0f)))
+	if (IsWorkZone((int)(this->m_Pos.x + 5.0f), (int)(this->m_Pos.y + this->m_Size.cy - 15.0f), (int)(this->m_Size.cx - 10.0f), 10))
 	{
 		if (MouseLButton && MouseLButtonPush)
 		{
@@ -403,6 +449,194 @@ bool CMoveList::CheckClickOnClose()
 	}
 
 	return false;
+}
+
+bool CMoveList::CheckMove(const MOVE_LIST_INFO& Move)
+{
+	bool bResult = true;
+
+	STRUCT_DECRYPT;
+
+	if (Move.MinLevel != -1 && *(WORD*)(CharacterAttribute + 0x0E) < Move.MinLevel)
+	{
+		bResult = false;
+
+		goto EXIT;
+	}
+
+	if (Move.MaxLevel != -1 && *(WORD*)(CharacterAttribute + 0x0E) > Move.MaxLevel)
+	{
+		bResult = false;
+
+		goto EXIT;
+	}
+
+	if (Move.MinReset != -1 && gPrintPlayer.ViewReset < (DWORD)Move.MinReset)
+	{
+		bResult = false;
+
+		goto EXIT;
+	}
+
+	if (Move.MaxReset != -1 && gPrintPlayer.ViewReset > (DWORD)Move.MaxReset)
+	{
+		bResult = false;
+
+		goto EXIT;
+	}
+
+	if (*(DWORD*)(CharacterMachine + 0x548) < Move.Money)
+	{
+		bResult = false;
+
+		goto EXIT;
+	}
+
+	if (this->PKLimitFree == 0 && *(BYTE*)(Hero + 0x2EA) >= PKLVL_OUTLAW)
+	{
+		bResult = false;
+
+		goto EXIT;
+	}
+
+	bResult = this->CheckSpecialRequirements(Move);
+
+EXIT:
+
+	STRUCT_ENCRYPT;
+
+	return bResult;
+}
+
+bool CMoveList::CheckSpecialRequirements(const MOVE_LIST_INFO& Move)
+{
+	switch (Move.MapNumber)
+	{
+		case MAP_ATLANS:
+		{
+			if (*(short*)(Hero + 0x2B8) == GET_ITEM_MODEL(13, 2) // Uniria
+				|| *(short*)(Hero + 0x2B8) == GET_ITEM_MODEL(13, 3)) // Dinorant
+			{
+				return false;
+			}
+
+			break;
+		}
+
+		case MAP_ICARUS:
+		{
+			if (*(short*)(Hero + 0x2A0) == -1
+				&& *(short*)(Hero + 0x2B8) != GET_ITEM_MODEL(13, 3)) // No wings or Dinorant
+			{
+				return false;
+			}
+
+			if (*(short*)(Hero + 0x2B8) == GET_ITEM_MODEL(13, 2)) // Uniria
+			{
+				return false;
+			}
+
+			break;
+		}
+	}
+
+	return true;
+}
+
+void CMoveList::SetNumberOfShowingLines(int nShowingLines)
+{
+	if (this->m_nShowingLines == nShowingLines)
+	{
+		return;
+	}
+
+	this->m_nShowingLines = nShowingLines;
+
+	this->Scrolling(0);
+
+	this->UpdateWndSize();
+
+	this->UpdateScrollSize();
+
+	this->UpdateScrollPos();
+}
+
+void CMoveList::Scrolling(int nRenderEndLine)
+{
+	int newEndLine;
+
+	if ((int)this->m_MoveList.size() <= this->m_nShowingLines)
+	{
+		newEndLine = (int)this->m_MoveList.size() - 1;
+	}
+	else if (nRenderEndLine < this->m_nShowingLines)
+	{
+		newEndLine = this->m_nShowingLines - 1;
+	}
+	else if (nRenderEndLine >= (int)this->m_MoveList.size())
+	{
+		newEndLine = (int)this->m_MoveList.size() - 1;
+	}
+	else
+	{
+		newEndLine = nRenderEndLine;
+	}
+
+	if (this->m_iCurrentRenderEndLine == newEndLine)
+	{
+		return;
+	}
+
+	this->m_iCurrentRenderEndLine = newEndLine;
+
+	this->UpdateScrollPos();
+}
+
+void CMoveList::UpdateWndSize()
+{
+	this->m_Size.cx = ((this->m_SectionWidth * 3.5f) + 10.0f);
+
+	this->m_Size.cy = MOVELIST_BASE_HEIGHT + this->m_nShowingLines * 12.0f;
+}
+
+void CMoveList::UpdateScrollSize()
+{
+	this->m_ScrollBarSize[0] = SCROLL_BAR_SIZE;
+
+	this->m_ScrollBarSize[1] = this->m_nShowingLines * 12.0f;
+
+	const int listSize = (int)this->m_MoveList.size();
+
+	if (listSize > this->m_nShowingLines)
+	{
+		const int numberOfLines = listSize - this->m_nShowingLines + 1;
+
+		this->m_ScrollBarSize[1] /= numberOfLines;
+	}
+}
+
+void CMoveList::UpdateScrollPos()
+{
+	if (this->m_nShowingLines >= (int)this->m_MoveList.size())
+	{
+		return;
+	}
+
+	// Calculate scroll bar position
+	float fPosRate = 1.0f;
+
+	if (this->m_nShowingLines < (int)this->m_MoveList.size())
+	{
+		int numberOfLines = (int)this->m_MoveList.size() - (this->m_nShowingLines - 1);
+
+		int currentRenderEndLine = this->m_iCurrentRenderEndLine - (this->m_nShowingLines - 1);
+
+		fPosRate = (float)(numberOfLines - currentRenderEndLine);
+	}
+
+	this->m_ScrollBarPos[0] = (float)this->m_Pos.x + this->m_Size.cx - SCROLL_WIDTH + SCROLL_BAR_SIZE;
+
+	this->m_ScrollBarPos[1] = ((float)this->m_Pos.y + this->m_nShowingLines * 12.0f + 35.0f) - (this->m_ScrollBarSize[1] * fPosRate);
 }
 
 void CMoveList::GCMoveListRecv(PMSG_MOVE_LIST_RECV* lpMsg)
@@ -443,7 +677,7 @@ void CMoveList::GCMoveListRecv(PMSG_MOVE_LIST_RECV* lpMsg)
 		this->m_MoveList.push_back(info);
 	}
 
-	this->MainHeight = this->MainBaseHeight + (lpMsg->count * 12.0f);
+	this->m_SectionWidth = MOVELIST_SECTION_WIDTH + (25.0f / g_fScreenRate_x);
 
-	this->MainHeight = (this->MainHeight > 430.0f) ? 430.0f : this->MainHeight;
+	this->SetNumberOfShowingLines(NUMBER_OF_SHOWING_MAPS);
 }

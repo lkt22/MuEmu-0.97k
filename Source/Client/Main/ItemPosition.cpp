@@ -435,7 +435,14 @@ void CItemPosition::MyRenderObjectScreen(int Type, int ItemLevel, int Option1, f
 			ObjectSelect_Angle[1] = WorldTime * 0.45f;
 		}
 
-		ObjectSelect_Type = Type;
+		if (Type >= MODEL_HELM && Type < MODEL_BOOTS + MAX_ITEM_TYPE)
+		{
+			ObjectSelect_Type = MODEL_PLAYER;
+		}
+		else
+		{
+			ObjectSelect_Type = Type;
+		}
 
 		DWORD b = gLoadModels.GetModels() + (188 * ObjectSelect_Type);
 
@@ -447,7 +454,26 @@ void CItemPosition::MyRenderObjectScreen(int Type, int ItemLevel, int Option1, f
 
 		ObjectSelect_PriorAction = 0;
 
-		*(float*)(b + 0x84) = 0; // b->BodyHeight = 0.0f;
+		if (Type >= MODEL_HELM && Type < MODEL_HELM + MAX_ITEM_TYPE)
+		{
+			*(float*)(b + 0x84) = -160.0f; // b->BodyHeight = 0.0f;
+		}
+		else if (Type >= MODEL_ARMOR && Type < MODEL_ARMOR + MAX_ITEM_TYPE)
+		{
+			*(float*)(b + 0x84) = -100.0f; // b->BodyHeight = 0.0f;
+		}
+		else if (Type >= MODEL_GLOVES && Type < MODEL_GLOVES + MAX_ITEM_TYPE)
+		{
+			*(float*)(b + 0x84) = -70.0f; // b->BodyHeight = 0.0f;
+		}
+		else if (Type >= MODEL_PANTS && Type < MODEL_PANTS + MAX_ITEM_TYPE)
+		{
+			*(float*)(b + 0x84) = -50.0f; // b->BodyHeight = 0.0f;
+		}
+		else
+		{
+			*(float*)(b + 0x84) = 0.0f; // b->BodyHeight = 0.0f;
+		}
 
 		float Scale = lpInfo->Scale;
 

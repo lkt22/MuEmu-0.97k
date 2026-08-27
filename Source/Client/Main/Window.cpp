@@ -70,13 +70,13 @@ void CWindow::Init(HINSTANCE hins)
 	SetCompleteHook(0xE8, 0x00412BC4, &this->FixDisplaySettingsOnClose);
 	SetByte(0x00412BC4 + 5, 0x90);
 
-	SetCompleteHook(0xE9, 0x0041ED79, 0x0041EEC6);
+	SetCompleteHook(0xE9, 0x0041ED79, 0x0041EEC6); // Skip Original Change Display Settings
 
 	SetCompleteHook(0xE9, 0x0041DFF0, &this->StartWindow);
 
 	SetCompleteHook(0xE9, 0x0041DE30, &this->CreateOpenglWindow);
 
-	SetCompleteHook(0xE9, 0x0041F617, 0x00421B0B);
+	SetCompleteHook(0xE9, 0x0041F617, 0x00421B0B); // Skip Window mode block
 }
 
 LONG WINAPI CWindow::FixDisplaySettingsOnClose(DEVMODEA* lpDevMode, DWORD dwFlags)
@@ -186,6 +186,33 @@ LRESULT WINAPI CWindow::MyWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 					break;
 				}
 			}
+
+			break;
+		}
+
+		case WM_ACTIVATE:
+		{
+			if (LOWORD(wParam) == WA_INACTIVE)
+			{
+				MouseLButton = false;
+
+				MouseLButtonPop = false;
+
+				MouseRButton = false;
+
+				MouseRButtonPop = false;
+
+				MouseRButtonPush = false;
+
+				gController.MouseWheel = 0;
+			}
+
+			break;
+		}
+
+		case WM_MOUSEWHEEL:
+		{
+			gController.MouseWheel = (short)HIWORD(wParam) / WHEEL_DELTA;
 
 			break;
 		}

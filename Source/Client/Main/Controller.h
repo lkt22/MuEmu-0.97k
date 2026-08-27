@@ -31,6 +31,8 @@ public:
 	bool AutoClick;
 
 	bool AutoClickState;
+
+	int MouseWheel;
 };
 
 extern Controller gController;

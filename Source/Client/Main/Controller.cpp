@@ -20,6 +20,8 @@ Controller::Controller()
 	this->AutoClick = false;
 
 	this->AutoClickState = false;
+
+	this->MouseWheel = 0;
 }
 
 Controller::~Controller()

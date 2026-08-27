@@ -1,5 +1,11 @@
 #pragma once
 
+struct SIZEF
+{
+	FLOAT cx;
+	FLOAT cy;
+};
+
 struct ITEM /* Struct Size = 68 */
 {
 	/*+00*/ short Type;

@@ -32,6 +32,21 @@ struct MOVE_LIST_INFO
 
 class CMoveList
 {
+	enum
+	{
+		MOVELIST_WINDOW_POSX = 1,
+		MOVELIST_WINDOW_POSY = 1,
+
+		MOVELIST_SECTION_WIDTH = 50,
+		MOVELIST_BASE_HEIGHT = 60,
+
+		// Scroll settings
+		SCROLL_WIDTH = 4, // Width of the scroll bar
+		SCROLL_BAR_SIZE = 2,
+
+		NUMBER_OF_SHOWING_MAPS = 20,
+	};
+
 public:
 
 	CMoveList();
@@ -52,31 +67,48 @@ private:
 
 	void RenderFrame();
 
+	void RenderScrollbar();
+
 	void RenderMapsList();
+
+	bool CheckScrolling();
 
 	bool CheckClickOnMap();
 
 	bool CheckClickOnClose();
 
+	bool CheckMove(const MOVE_LIST_INFO& Move);
+
+	bool CheckSpecialRequirements(const MOVE_LIST_INFO& Move);
+
+	void SetNumberOfShowingLines(int nShowingLines);
+
+	void Scrolling(int nRenderEndLine);
+
+	void UpdateWndSize();
+
+	void UpdateScrollSize();
+	void UpdateScrollPos();
+
 private:
 
 	bool MoveListSwitch;
 
-	float MainWidth;
+	POINT m_Pos;
 
-	float MainHeight;
+	SIZEF m_Size;
 
-	float MainBaseHeight;
+	float m_SectionWidth;
 
-	float MainPosX;
+	int m_nShowingLines;
+	int m_iCurrentRenderEndLine;
 
-	float MainPosY;
-
-	float SectionWidth;
-
-	BYTE PKLimitFree;
+	float m_ScrollBarPos[2];
+	float m_ScrollBarSize[2];
 
 	std::vector<MOVE_LIST_INFO> m_MoveList;
+
+	BYTE PKLimitFree;
 };
 
 extern CMoveList gMoveList;
