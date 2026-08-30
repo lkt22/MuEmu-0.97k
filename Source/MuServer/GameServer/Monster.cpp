@@ -1189,7 +1189,7 @@ int gObjMonsterGetTargetPos(LPOBJ lpObj)
 		return 0;
 	}
 
-	if (OBJECT_RANGE(lpObj->TargetNumber) == false)
+	if (OBJECT_RANGE(lpObj->TargetNumber) == 0)
 	{
 		return 0;
 	}
@@ -1201,16 +1201,16 @@ int gObjMonsterGetTargetPos(LPOBJ lpObj)
 		return 0;
 	}
 
-	if (gObjMonsterViewportIsCharacter(lpObj) == -1)
+	if (gObjMonsterViewportIsCharacter(lpObj) < 0)
 	{
 		return 0;
 	}
 
 	int dis = (lpObj->AttackType >= 100) ? (lpObj->AttackRange + 2) : lpObj->AttackRange;
 
-	int tpx = (lpObj->X > lpTarget->X) ? (lpTarget->X + dis) : (lpTarget->X - dis);
+	int tpx = (lpObj->X > lpTarget->X) ? (lpTarget->X + dis) : (lpObj->X < lpTarget->X) ? (lpTarget->X - dis) : lpTarget->X;
 
-	int tpy = (lpObj->Y > lpTarget->Y) ? (lpTarget->Y + dis) : (lpTarget->Y - dis);
+	int tpy = (lpObj->Y > lpTarget->Y) ? (lpTarget->Y + dis) : (lpObj->Y < lpTarget->Y) ? (lpTarget->Y - dis) : lpTarget->Y;
 
 	int mtx = lpTarget->X;
 
@@ -1228,9 +1228,10 @@ int gObjMonsterGetTargetPos(LPOBJ lpObj)
 
 			BYTE attr = gMap[lpObj->Map].GetAttr(mtx, mty);
 
-			if (gObjMonsterMoveCheck(lpObj, mtx, mty) != 0)
+			if (gObjMonsterMoveCheck(lpObj, mtx, mty))
 			{
-				if ((lpObj->Class == 249 && (attr & 2) != 2) || ((attr & 1) != 1 && (attr & 2) != 2 && (attr & 4) != 4 && (attr & 8) != 8))
+				if ((lpObj->Class == 249 && (attr & 2) != 2)
+					|| ((attr & 1) != 1 && (attr & 2) != 2 && (attr & 4) != 4 && (attr & 8) != 8))
 				{
 					lpObj->MTX = mtx;
 
@@ -1251,9 +1252,10 @@ int gObjMonsterGetTargetPos(LPOBJ lpObj)
 	{
 		BYTE attr = gMap[lpObj->Map].GetAttr(tpx, tpy);
 
-		if (gObjMonsterMoveCheck(lpObj, mtx, mty) != 0)
+		if (gObjMonsterMoveCheck(lpObj, tpx, tpy))
 		{
-			if ((lpObj->Class == 249 && (attr & 2) != 2) || ((attr & 1) != 1 && (attr & 2) != 2 && (attr & 4) != 4 && (attr & 8) != 8))
+			if ((lpObj->Class == 249 && (attr & 2) != 2)
+				|| ((attr & 1) != 1 && (attr & 2) != 2 && (attr & 4) != 4 && (attr & 8) != 8))
 			{
 				lpObj->MTX = tpx;
 
@@ -1473,7 +1475,7 @@ void gObjMonsterProcess(LPOBJ lpObj)
 
 	lpObj->CurActionTime = GetTickCount();
 
-	if (BC_MAP_RANGE(lpObj->Map) != false)
+	if (BC_MAP_RANGE(lpObj->Map) != 0)
 	{
 		if (lpObj->Class == 131 || ((lpObj->Class - 132 < 0) ? FALSE : (lpObj->Class - 132 > 2) ? FALSE : TRUE) != FALSE)
 		{
@@ -1650,7 +1652,6 @@ void gObjMonsterProcess(LPOBJ lpObj)
 					{
 						gObjMonsterAttack(lpObj, &gObj[lpObj->TargetNumber]);
 					}
-
 				}
 				else
 				{
@@ -1861,25 +1862,20 @@ void gObjMonsterBaseAct(LPOBJ lpObj)
 
 					int ty = 0;
 
-					if (lpObj->SummonIndex >= 0)
+					if (gObjIsConnectedGS(lpObj->SummonIndex) == true)
 					{
-						if (gObj[lpObj->SummonIndex].Connected > OBJECT_LOGGED)
+						LPOBJ lpRecallObj = &gObj[lpObj->SummonIndex];
+
+						if (lpRecallObj->Rest == FALSE
+							&& gObjGetTargetPos(lpObj, lpRecallObj->X, lpRecallObj->Y, tx, ty) == TRUE)
 						{
-							LPOBJ lpRecallObj = &gObj[lpObj->SummonIndex];
+							lpObj->MTX = tx;
 
-							if (lpRecallObj->Rest == FALSE)
-							{
-								if (gObjGetTargetPos(lpObj, lpRecallObj->X, lpRecallObj->Y, tx, ty) == TRUE)
-								{
-									lpObj->MTX = tx;
+							lpObj->MTY = ty;
 
-									lpObj->MTY = ty;
+							lpObj->ActionState.Move = 1;
 
-									lpObj->ActionState.Move = 1;
-
-									lpObj->NextActionTime = 1000;
-								}
-							}
+							lpObj->NextActionTime = 1000;
 						}
 					}
 				}
@@ -1930,7 +1926,7 @@ void gObjMonsterBaseAct(LPOBJ lpObj)
 
 		if (lpObj->TargetNumber >= 0 && lpObj->PathStartEnd == 0)
 		{
-			if (BC_MAP_RANGE(lpObj->Map) != false)
+			if (BC_MAP_RANGE(lpObj->Map) != 0)
 			{
 				int iRAND_CHANGE_TARGET = GetLargeRand() % 10;
 
